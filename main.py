@@ -1,9 +1,9 @@
-# app.py
+# main.py
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
-import bcrypt 
+import bcrypt # Importamos bcrypt
 from functools import wraps
 
 load_dotenv()
@@ -11,8 +11,7 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your_fallback_secret_key')
 
-# Inicializar bcrypt
-bcrypt_instance = bcrypt.Bcrypt(app) # Inicializamos bcrypt con la app de Flask
+# No es necesario inicializar bcrypt como un objeto de Flask
 
 url: str = os.getenv("SUPABASE_URL")
 key: str = os.getenv("SUPABASE_KEY")
@@ -73,14 +72,17 @@ LEVELS = {
 # Función para hashear contraseñas usando bcrypt
 def hash_password(password):
     # Genera un salt y hashea la contraseña
-    salt = bcrypt_instance.gensalt()
-    hashed = bcrypt_instance.hashpw(password.encode('utf-8'), salt)
-    return hashed.decode('utf-8') # Devuelve como string para almacenar
+    # bcrypt.hashpw espera bytes, por lo que codificamos la string
+    salt = bcrypt.gensalt()
+    hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), salt)
+    # Devuelve como string para almacenar (decodifica los bytes)
+    return hashed_bytes.decode('utf-8')
 
 # Función para verificar la contraseña
 def check_password(password, hashed):
-    # Compara la contraseña proporcionada con el hash almacenado
-    return bcrypt_instance.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    # bcrypt.checkpw espera bytes para ambos argumentos
+    # Codificamos la contraseña introducida y el hash almacenado
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 @app.route('/')
 def index():
