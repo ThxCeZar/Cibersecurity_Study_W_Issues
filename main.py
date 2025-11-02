@@ -3,15 +3,29 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
-import bcrypt # Importamos bcrypt
+import bcrypt
 from functools import wraps
+from cryptography.fernet import Fernet # Importamos Fernet para cifrado/descifrado
+import base64
+from markupsafe import Markup # Importamos Markup
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your_fallback_secret_key')
 
-# No es necesario inicializar bcrypt como un objeto de Flask
+# Carga la clave de cifrado desde las variables de entorno
+# Debes generar una clave con `Fernet.generate_key()` y guardarla en Render como variable de entorno
+cipher_key = os.getenv('CIPHER_KEY')
+if not cipher_key:
+    print("Advertencia: CIPHER_KEY no encontrada. Generando una clave temporal (NO para producción).")
+    cipher_key = Fernet.generate_key()
+    print(f"Clave temporal generada: {cipher_key.decode()}")
+    cipher_key = base64.urlsafe_b64decode(cipher_key)
+else:
+    # Asegúrate de que la clave esté en formato adecuado para Fernet
+    cipher_key = base64.urlsafe_b64decode(cipher_key)
+cipher_suite = Fernet(cipher_key)
 
 url: str = os.getenv("SUPABASE_URL")
 key: str = os.getenv("SUPABASE_KEY")
@@ -69,19 +83,12 @@ LEVELS = {
     }
 }
 
-# Función para hashear contraseñas usando bcrypt
 def hash_password(password):
-    # Genera un salt y hashea la contraseña
-    # bcrypt.hashpw espera bytes, por lo que codificamos la string
     salt = bcrypt.gensalt()
     hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), salt)
-    # Devuelve como string para almacenar (decodifica los bytes)
     return hashed_bytes.decode('utf-8')
 
-# Función para verificar la contraseña
 def check_password(password, hashed):
-    # bcrypt.checkpw espera bytes para ambos argumentos
-    # Codificamos la contraseña introducida y el hash almacenado
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 @app.route('/')
@@ -100,21 +107,33 @@ def show_level(level_name):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Pasamos la clave de cifrado a la plantilla, escapándola para JS
+    cipher_key_js = Markup(cipher_key.decode()) if isinstance(cipher_key, bytes) else Markup(cipher_key)
+
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password'] # Contraseña en texto plano desde el formulario
+        encrypted_username_b64 = request.form.get('username')
+        encrypted_password_b64 = request.form.get('password')
+
+        if not encrypted_username_b64 or not encrypted_password_b64:
+            flash('Datos de formulario incompletos.')
+            return render_template('login.html', cipher_key_js=cipher_key_js)
 
         try:
-            # Obtiene el usuario de la base de datos
+            username = cipher_suite.decrypt(encrypted_username_b64.encode()).decode()
+            password = cipher_suite.decrypt(encrypted_password_b64.encode()).decode()
+        except Exception as e:
+            flash('Error al procesar los datos de inicio de sesión.')
+            print(f"Error de descifrado: {e}")
+            return render_template('login.html', cipher_key_js=cipher_key_js)
+
+        try:
             response = supabase.table('users').select('*').eq('UserName', username).execute()
             user_data = response.data
 
             if user_data:
-                # Accede al primer (y debería ser único) registro
                 user_record = user_data[0]
                 stored_hashed_password = user_record['UserPassword']
 
-                # Verifica la contraseña usando bcrypt
                 if check_password(password, stored_hashed_password):
                     session['username'] = username
                     flash('Inicio de sesión exitoso.')
@@ -126,32 +145,45 @@ def login():
 
         except Exception as e:
             flash(f'Error al conectar con la base de datos: {e}')
-    return render_template('login.html')
-
+    return render_template('login.html', cipher_key_js=cipher_key_js)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # Pasamos la clave de cifrado a la plantilla, escapándola para JS
+    cipher_key_js = Markup(cipher_key.decode()) if isinstance(cipher_key, bytes) else Markup(cipher_key)
+
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password'] # Contraseña en texto plano desde el formulario
-        hashed_password = hash_password(password) # Hashea la contraseña
+        encrypted_username_b64 = request.form.get('username')
+        encrypted_password_b64 = request.form.get('password')
+
+        if not encrypted_username_b64 or not encrypted_password_b64:
+            flash('Datos de formulario incompletos.')
+            return render_template('register.html', cipher_key_js=cipher_key_js)
 
         try:
-            # Verificar si el nombre de usuario ya existe
+            username = cipher_suite.decrypt(encrypted_username_b64.encode()).decode()
+            password = cipher_suite.decrypt(encrypted_password_b64.encode()).decode()
+        except Exception as e:
+            flash('Error al procesar los datos de registro.')
+            print(f"Error de descifrado: {e}")
+            return render_template('register.html', cipher_key_js=cipher_key_js)
+
+        hashed_password = hash_password(password)
+
+        try:
             check_response = supabase.table('users').select('id').eq('UserName', username).execute()
             if check_response.data:
                 flash('El nombre de usuario ya está en uso.')
             else:
-                # Insertar nuevo usuario con la contraseña hasheada
                 supabase.table('users').insert({
                     'UserName': username,
-                    'UserPassword': hashed_password # Almacena el hash
+                    'UserPassword': hashed_password
                 }).execute()
                 flash('Usuario registrado exitosamente. Puedes iniciar sesión.')
                 return redirect(url_for('login'))
         except Exception as e:
             flash(f'Error al registrar usuario: {e}')
-    return render_template('register.html')
+    return render_template('register.html', cipher_key_js=cipher_key_js)
 
 @app.route('/logout')
 def logout():
@@ -161,6 +193,5 @@ def logout():
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    # No uses debug=True en producción
     debug_mode = os.getenv('FLASK_ENV') == 'development'
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
