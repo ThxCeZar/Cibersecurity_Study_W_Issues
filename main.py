@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
-import bcrypt # Importamos bcrypt
+import bcrypt 
 from functools import wraps
 
 load_dotenv()
@@ -137,7 +137,7 @@ def register():
         try:
             # Verificar si el nombre de usuario ya existe
             check_response = supabase.table('users').select('id').eq('UserName', username).execute()
-            if check_response.
+            if check_response.data:
                 flash('El nombre de usuario ya está en uso.')
             else:
                 # Insertar nuevo usuario con la contraseña hasheada
