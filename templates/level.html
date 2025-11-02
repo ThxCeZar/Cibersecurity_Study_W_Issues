@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}{{ level.name }} - CiberAttacks Study{% endblock %}
+
+{% block content %}
+<div class="level-header">
+    <h2>Cursos: {{ level.name }}</h2>
+    <a href="{{ url_for('index') }}" class="btn btn-secondary">Volver al Inicio</a>
+</div>
+
+<div class="videos-container">
+    {% for video in level.videos %}
+    <div class="video-card">
+        <h4>{{ video.title }}</h4>
+        <a href="{{ video.url }}" target="_blank" class="btn btn-video">Ver en YouTube</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

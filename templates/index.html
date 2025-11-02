@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero">
+    <h2>Bienvenido a CiberAttacks Study</h2>
+    <p>Explora los cursos sobre ciberataques organizados por niveles.</p>
+</div>
+
+<div class="levels-container">
+    {% for key, info in levels.items() %}
+    <div class="level-card">
+        <h3>{{ info.name }}</h3>
+        <a href="{{ url_for('show_level', level_name=key) }}" class="btn">Ver Cursos</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
