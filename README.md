@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">🐾 CIBERSECURITY STUDY PAGE 🐾</h1>
-
+<p align="center"> - - VERSION SIN VULNERABILIDADES - - </p>
 <br>
 <p align="center">
   <img src="https://img.shields.io/badge/Status-En%20Desarrollo-pink?style=for-the-badge&logo=github" />
